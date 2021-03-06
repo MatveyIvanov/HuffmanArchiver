@@ -38,9 +38,6 @@ public:
 	BinaryTree(Node* r) : root(r) {};
 
 	Node* get_root();
-
-	void bft();
-	void dft();
 private:
 	Node* root;
 };

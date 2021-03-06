@@ -1,20 +1,22 @@
 ﻿#include <iostream>
-#include <queue>
-#include <map>
-#include <stack>
 #include <fstream>
 #include <string>
-#include <boost/dynamic_bitset.hpp>
-#include "BinaryTree.h"
 #include <stdio.h>
+#include <boost/dynamic_bitset.hpp>
+#include "PriorityQueue.h"
+#include "Queue.h"
+#include "Map.h"
+#include "Stack.h"
+#include "BinaryTree.h"
+#include <sys/stat.h>
 
 using namespace std;
 
 string read_file(string filename); // Read text from file to string
-map<char, int> count_frequency(string text); // Count frequency of each character in text
-BinaryTree* huffman_tree(map<char, int> freq); // Create Huffman tree using priority queue
-map<char, string> huffman_table(BinaryTree*); // Create Huffman table based on Huffman tree
-void compress_n_write(map<char, string>, string, string, BinaryTree*); // Compress text and write it to new file
+Map<char, int> count_frequency(string text); // Count frequency of each character in text
+BinaryTree* huffman_tree(Map<char, int>); // Create Huffman tree using priority queue
+Map<char, string> huffman_table(BinaryTree*); // Create Huffman table based on Huffman tree
+void compress_n_write(Map<char, string>, string, string, BinaryTree*); // Compress text and write it to new file
 string read_n_decompress(string); // Read compressed text from file and decompress it to string
 
 void help(); // Write instructions to console
@@ -24,11 +26,13 @@ bool correct_outfile_extension(string, bool); // Check if output file has correc
 
 void main(int argc, char* argv[])
 {
+	setlocale(LC_ALL, "rus");
+
 	string file_name, newfile_name; // newfile_name - outfile name
 	bool compress = true; // If false - program decompresses the file
 
 	if (argc == 1) { // Case when no arguments passed after program call
-		help(); 
+		help();
 	}
 	else {
 		if (argv[1] == string("-h") || argv[1] == string("--help")) { // Help flags
@@ -54,6 +58,10 @@ void main(int argc, char* argv[])
 	}
 
 	string file_text; // Variable to store text from file
+	int file1_size, file2_size;
+	Map<char, int> freq;
+	BinaryTree* tree;
+	Map<char, string> table;
 	if (correct_file_extension(file_name, compress)) {
 		if (compress) {
 			try {
@@ -66,15 +74,68 @@ void main(int argc, char* argv[])
 			if (file_text.empty()) // If file is empty
 				cout << "File is empty";
 			else {
-				BinaryTree* tree = huffman_tree(count_frequency(file_text)); // Create huffman tree
-				map<char, string> table = huffman_table(tree); // Create huffman table
+				freq = count_frequency(file_text); // Create frequency table
+				tree = huffman_tree(freq); // Create huffman tree
+				table = huffman_table(tree); // Create huffman table
 				if (newfile_name.empty()) { // If output file name hasn't been set
+					struct stat fi;
+					stat(file_name.c_str(), &fi);
+					file1_size = fi.st_size;
+					cout << endl << "Размер файла до сжатия: " << file1_size << " Кбайт" << endl;
 					compress_n_write(table, file_text, file_name, tree); // Compress to same file
+					stat(file_name.c_str(), &fi);
+					file2_size = fi.st_size;
+					cout << "Размер файла после сжатия: " << file2_size << " Кбайт" << endl;
+
+					// Frequency table output
+					cout << endl << endl << "ТАБЛИЦА ЧАСТОТ:" << endl << endl;
+					Map<char, int>::Iterator it1(&freq);
+					while (it1.has_next()) {
+						Map<char, int>::Node* cur = it1.next();
+						cout << cur->get_key() << ": " << cur->get_value() << endl;
+					}
+
+					// Huffman table output
+					cout << endl << endl << "ТАБЛИЦА КОДОВ:" << endl << endl;
+					Map<char, string>::Iterator it2(&table);
+					while (it2.has_next()) {
+						Map<char, string>::Node* cur = it2.next();
+						cout << cur->get_key() << ": " << cur->get_value() << endl;
+					}
+
+					// Сompression ratio output
+					cout << endl << endl << "Коэффициент сжатия: " << (double)file1_size / (double)file2_size << endl;
 				}
 				else {
 					if (correct_outfile_extension(newfile_name, compress)) { // If output file has correct extension
+						struct stat fi;
+						stat(file_name.c_str(), &fi);
+						file1_size = fi.st_size;
+						cout << endl << "Размер файла до сжатия: " << file1_size << " Кбайт" << endl;
 						file_name = newfile_name;
 						compress_n_write(table, file_text, file_name, tree); // Compress to output file
+						stat(file_name.c_str(), &fi);
+						file2_size = fi.st_size;
+						cout << "Размер файла после сжатия: " << file2_size << " Кбайт" << endl;
+
+						// Frequency table output
+						cout << endl << endl << "ТАБЛИЦА ЧАСТОТ:" << endl << endl;
+						Map<char, int>::Iterator it1(&freq);
+						while (it1.has_next()) {
+							Map<char, int>::Node* cur = it1.next();
+							cout << cur->get_key() << ": " << cur->get_value() << endl;
+						}
+
+						// Huffman table output
+						cout << endl << endl << "ТАБЛИЦА КОДОВ:" << endl << endl;
+						Map<char, string>::Iterator it2(&table);
+						while (it2.has_next()) {
+							Map<char, string>::Node* cur = it2.next();
+							cout << cur->get_key() << ": " << cur->get_value() << endl;
+						}
+
+						// Сompression ratio output
+						cout << endl << endl << "Коэффициент сжатия: " << (double)file1_size / (double)file2_size << endl;
 					}
 					else { // Incorrect output file extension
 						cout << "Incorrect out file name or extension. Use -h for more information\n";
@@ -149,23 +210,24 @@ string read_file(string filename) {
 	return text;
 }
 
-map<char, int> count_frequency(string text) {
-	map<char, int> frequencies;
+Map<char, int> count_frequency(string text) {
+	Map<char, int> frequencies;
 
 	for (size_t i = 0; i < text.size(); i++) { // Count frequency of every character in text
-		if (frequencies.find(text[i]) == frequencies.end())
-			frequencies.insert(make_pair(text[i], 1));
+		if (frequencies.find(text[i]) == NULL)
+			frequencies.insert(text[i], 1);
 		else
-			frequencies[text[i]]++;
+			frequencies.increment(text[i]);
 	}
 	return frequencies;
 }
 
-BinaryTree* huffman_tree(map<char, int> freq) {
-	auto comp = [](BinaryTree::Node* a, BinaryTree::Node* b) {return a->get_freq() > b->get_freq(); }; // Lambda for comparison two nodes (based on node's frequency)
-	priority_queue <BinaryTree::Node*, vector<BinaryTree::Node*>, decltype(comp)> q(comp);
-	for (auto const& x : freq) {
-		q.push(new BinaryTree::Node(x.second, x.first));
+BinaryTree* huffman_tree(Map<char, int> freq) {
+	PriorityQueue q(freq.size());
+	Map<char, int>::Iterator it(&freq);
+	while (it.has_next()) {
+		Map<char, int>::Node* temp = it.next();
+		q.push(new BinaryTree::Node(temp->get_value(), temp->get_key()));
 	}
 
 	while (true) {
@@ -173,12 +235,12 @@ BinaryTree* huffman_tree(map<char, int> freq) {
 		q.pop();
 		BinaryTree::Node* node2 = q.top();
 		q.pop();
-		if (q.empty()) {
+		if (q.isEmpty()) { // Create tree
 			BinaryTree::Node* root = new BinaryTree::Node(node1->get_freq() + node2->get_freq(), '\0', node1, node2);
 			BinaryTree* tree = new BinaryTree(root);
 			return tree;
 		}
-		else { // Create tree
+		else { 
 			q.push(new BinaryTree::Node(node1->get_freq() + node2->get_freq(), '\0', node1, node2));
 		}
 	}
@@ -186,16 +248,16 @@ BinaryTree* huffman_tree(map<char, int> freq) {
 	return nullptr; // If smth went wrong
 }
 
-map<char, string> huffman_table(BinaryTree* tree) { // Create huffman table
-	map<char, string> table;
-	stack<BinaryTree::Node*> s;
+Map<char, string> huffman_table(BinaryTree* tree) { // Create huffman table
+	Map<char, string> table;
+	Stack<BinaryTree::Node*> s;
 	tree->get_root()->set_code("");
 	s.push(tree->get_root());
-	while (!s.empty()) {
+	while (!s.isEmpty()) {
 		BinaryTree::Node* cur = s.top();
 		s.pop();
 		if (!cur->get_code().empty() && cur->get_letter() != '\0')
-			table.insert(make_pair(cur->get_letter(), cur->get_code()));
+			table.insert(cur->get_letter(), cur->get_code());
 		if (cur->get_left() != nullptr) {
 			if (cur->get_code().empty())
 				cur->get_left()->set_code("0");
@@ -214,8 +276,8 @@ map<char, string> huffman_table(BinaryTree* tree) { // Create huffman table
 	return table;
 }
 
-void compress_n_write(map<char, string> table, string text, string filename, BinaryTree* tree) {
-	string uncompressed; // Text to compress
+void compress_n_write(Map<char, string> table, string text, string filename, BinaryTree* tree) {
+	string uncompressed(""); // Text to compress
 	for (int i = 0; i < text.size(); i++)
 		uncompressed += table[text[i]];
 
@@ -256,13 +318,13 @@ void compress_n_write(map<char, string> table, string text, string filename, Bin
 	ofstream treeout(tree_filename);
 	int tree_lvl = 1, cur_node = 0, let_added = 0;
 	BinaryTree::Node* cur = tree->get_root();
-	queue<BinaryTree::Node*> q;
-	q.push(cur);
-	while (!q.empty()) {
-		cur = q.front();
+	Queue q;
+	q.enqueue(cur);
+	while (!q.isEmpty()) {
+		cur = q.dequeue();
 		if (cur->get_left() != nullptr) {
-			q.push(cur->get_left());
-			q.push(cur->get_right());
+			q.enqueue(cur->get_left());
+			q.enqueue(cur->get_right());
 			if (cur_node == pow(2, tree_lvl - 1)) {
 				tree_lvl++;
 				cur_node = let_added * 2;
@@ -290,8 +352,6 @@ void compress_n_write(map<char, string> table, string text, string filename, Bin
 		}
 		if (cur_node != pow(2, tree_lvl - 1))
 			treeout << ' ';
-
-		q.pop();
 	}
 	treeout.close();
 }
@@ -328,31 +388,29 @@ string read_n_decompress(string filename) {
 	BinaryTree* tree = new BinaryTree(new BinaryTree::Node(0, '\0', nullptr, nullptr));
 	BinaryTree::Node* cur = tree->get_root();
 	ifstream treein(tree_filename);
-	queue<BinaryTree::Node*> q;
-	q.push(cur);
+	Queue q;
+	q.enqueue(cur);
 	string cur_line;
 	getline(treein, cur_line);
-	while (!q.empty()) {
+	while (!q.isEmpty()) {
 		if (!treein.eof()) {
 			getline(treein, cur_line);
 			int line_index = 0;
-			cur = q.front();
-			q.pop();
+			cur = q.dequeue();
 			while (line_index < cur_line.size()) {
 				if (cur_line[line_index] == 'E' && line_index + 1 < cur_line.size() && cur_line[line_index + 1] == 'M') {
 					if (cur->get_left() == nullptr) {
 						cur->set_left(new BinaryTree::Node(0, '\0', nullptr, nullptr));
 						line_index += 3;
-						q.push(cur->get_left());
+						q.enqueue(cur->get_left());
 					}
 					else if (cur->get_right() == nullptr) {
 						cur->set_right(new BinaryTree::Node(0, '\0', nullptr, nullptr));
 						line_index += 3;
-						q.push(cur->get_right());
+						q.enqueue(cur->get_right());
 					}
-					else if (!q.empty()) {
-						cur = q.front();
-						q.pop();
+					else if (!q.isEmpty()) {
+						cur = q.dequeue();
 					}
 				}
 				else if (cur_line[line_index] == 'S' && line_index + 1 < cur_line.size() && cur_line[line_index + 1] == 'P') {
@@ -364,9 +422,8 @@ string read_n_decompress(string filename) {
 						cur->set_right(new BinaryTree::Node(0, ' ', nullptr, nullptr));
 						line_index += 3;
 					}
-					else if (!q.empty()) {
-						cur = q.front();
-						q.pop();
+					else if (!q.isEmpty()) {
+						cur = q.dequeue();
 					}
 				}
 				else if (cur_line[line_index] == 'N' && line_index + 1 < cur_line.size() && cur_line[line_index + 1] == 'L') {
@@ -378,9 +435,8 @@ string read_n_decompress(string filename) {
 						cur->set_right(new BinaryTree::Node(0, '\n', nullptr, nullptr));
 						line_index += 3;
 					}
-					else if (!q.empty()) {
-						cur = q.front();
-						q.pop();
+					else if (!q.isEmpty()) {
+						cur = q.dequeue();
 					}
 				}
 				else {
@@ -392,9 +448,8 @@ string read_n_decompress(string filename) {
 						cur->set_right(new BinaryTree::Node(0, cur_line[line_index], nullptr, nullptr));
 						line_index += 2;
 					}
-					else if (!q.empty()) {
-						cur = q.front();
-						q.pop();
+					else if (!q.isEmpty()) {
+						cur = q.dequeue();
 					}
 				}
 			}
@@ -408,18 +463,17 @@ string read_n_decompress(string filename) {
 	string uncompressed("");
 	cur = tree->get_root();
 	for (size_t i = compressed.size(); i >= 1; i--) {
-		if (compressed[i - 1] == 0)
+		if (cur != nullptr && compressed[i - 1] == 0)
 			cur = cur->get_left();
-		else
+		else if (cur != nullptr)
 			cur = cur->get_right();
-		if (cur->get_letter() != '\0') {
+		if (cur != nullptr && cur->get_letter() != '\0') {
 			uncompressed += cur->get_letter();
 			cur = tree->get_root();
 		}
 	}
 
 	treein.close();
-
 
 	/* Delete tree file */
 	if (remove(tree_filename.c_str()) != 0)
