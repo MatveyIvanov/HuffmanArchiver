@@ -2,7 +2,6 @@
 #include <fstream>
 #include <string>
 #include <stdio.h>
-#include <boost/dynamic_bitset.hpp>
 #include "PriorityQueue.h"
 #include "Queue.h"
 #include "Map.h"
@@ -202,7 +201,7 @@ bool correct_outfile_extension(string filename, bool compress) {
 string read_file(string filename) {
 	ifstream fin(filename);
 	if (!fin.is_open()) {
-		string emessage = "Error opening file " + filename + ". Make sure this file exists.";
+		string emessage = "Error opening file " + filename + ". Make sure this file exists";
 		throw exception(emessage.c_str());
 	}
 	string text((istreambuf_iterator<char>(fin)), istreambuf_iterator<char>());
@@ -225,12 +224,12 @@ Map<char, int> count_frequency(string text) {
 BinaryTree* huffman_tree(Map<char, int> freq) {
 	PriorityQueue q(freq.size());
 	Map<char, int>::Iterator it(&freq);
-	while (it.has_next()) {
+	while (it.has_next()) { // Add all symbols from frequency table
 		Map<char, int>::Node* temp = it.next();
 		q.push(new BinaryTree::Node(temp->get_value(), temp->get_key()));
 	}
 
-	while (true) {
+	while (true) { // Create huffman tree
 		BinaryTree::Node* node1 = q.top();
 		q.pop();
 		BinaryTree::Node* node2 = q.top();
@@ -240,7 +239,7 @@ BinaryTree* huffman_tree(Map<char, int> freq) {
 			BinaryTree* tree = new BinaryTree(root);
 			return tree;
 		}
-		else { 
+		else { // Create new node
 			q.push(new BinaryTree::Node(node1->get_freq() + node2->get_freq(), '\0', node1, node2));
 		}
 	}
@@ -282,28 +281,24 @@ void compress_n_write(Map<char, string> table, string text, string filename, Bin
 		uncompressed += table[text[i]];
 
 	ofstream fout(filename, ofstream::binary);
-	boost::dynamic_bitset<> compressed(uncompressed.size()); // For bits
-	for (int i = 0; i < uncompressed.size(); i++) { // Write bits to bitset
-		if (uncompressed[i] == '1')
-			compressed[uncompressed.size() - i - 1].flip();
-	}
 
-	unsigned char bitbuffer = 0;
-	while (compressed.size() > 0) { // Write bitset to file
+	unsigned char bitbuffer = 0; // For storing 8 bits
+	while (uncompressed.size() > 0) { // Write bits to file
 		size_t i;
-		for (i = 0; i < 8 && i < compressed.size(); i++) {
-			if ((compressed[compressed.size() - i - 1] & 1) == 1)
-				bitbuffer |= 1 << i;
+		for (i = 0; i <= 7 && i < uncompressed.size(); i++) {
+			if (uncompressed[i] == '1')
+				bitbuffer |= 1 << (7 - i);
 		}
-		if (i < 7) {
-			fout << i;
+		if (i < 7) { // If last byte not fully filled
+			fout << i; // Write number of bits to be read in last byte
 		}
-		fout.write(reinterpret_cast<const char*>(&bitbuffer), 1);
+		fout.write(reinterpret_cast<const char*>(&bitbuffer), 1); // Write byte to the file
 		bitbuffer = 0;
-		if (compressed.size() >= 8) {
-			compressed.resize(compressed.size() - 8);
+		if (uncompressed.size() >= 8) { // Delete first 8 elements from string
+			for (i = 0; i < 8; i++)
+				uncompressed.erase(uncompressed.begin());
 		}
-		else
+		else // If all bits are written
 			break;
 	}
 
@@ -311,35 +306,37 @@ void compress_n_write(Map<char, string> table, string text, string filename, Bin
 
 
 	/* Create tree file for decompress */
+	filename.pop_back(); // Delete txt extension from filename
 	filename.pop_back();
 	filename.pop_back();
-	filename.pop_back();
-	string tree_filename = "tree" + filename + "bin";
+	string tree_filename = "tree" + filename + "bin"; // Tree filename
 	ofstream treeout(tree_filename);
-	int tree_lvl = 1, cur_node = 0, let_added = 0;
+	int tree_lvl = 1; // Current height level of the tree
+	int	cur_node = 0; // Current node of the tree
+	int let_added = 0; // Letters added to the file
 	BinaryTree::Node* cur = tree->get_root();
 	Queue q;
 	q.enqueue(cur);
-	while (!q.isEmpty()) {
+	while (!q.isEmpty()) { // BFT
 		cur = q.dequeue();
-		if (cur->get_left() != nullptr) {
+		if (cur->get_left() != nullptr) { // If current node is not leaf
 			q.enqueue(cur->get_left());
 			q.enqueue(cur->get_right());
-			if (cur_node == pow(2, tree_lvl - 1)) {
-				tree_lvl++;
-				cur_node = let_added * 2;
+			if (cur_node == pow(2, tree_lvl - 1)) { // If current node is last on current level of the tree
+				tree_lvl++; // Increase tree level
+				cur_node = let_added * 2; // Multiply by 2 because new level has 2 times more nodes than previous
 				let_added *= 2;
-				treeout << '\n';
+				treeout << '\n'; // Write new line to the file
 			}
-			treeout << "EM"; // Empty node
+			treeout << "EM"; // Empty node, because all not leaf nodes are empty
 			cur_node++;
 		}
-		else {
-			if (cur_node == pow(2, tree_lvl - 1)) {
-				tree_lvl++;
-				cur_node = let_added * 2;
+		else { // If current node is leaf
+			if (cur_node == pow(2, tree_lvl - 1)) {	// If current node is last on current level of the tree
+				tree_lvl++; // Increase tree level
+				cur_node = let_added * 2; // Multiply by 2 because new level has 2 times more nodes than previous
 				let_added *= 2;
-				treeout << '\n';
+				treeout << '\n'; // Write new line to the file
 			}
 			if (cur->get_letter() == ' ')
 				treeout << "SP"; // Node with space
@@ -350,7 +347,7 @@ void compress_n_write(Map<char, string> table, string text, string filename, Bin
 			cur_node++;
 			let_added++;
 		}
-		if (cur_node != pow(2, tree_lvl - 1))
+		if (cur_node != pow(2, tree_lvl - 1)) // Write space between nodes
 			treeout << ' ';
 	}
 	treeout.close();
@@ -358,33 +355,32 @@ void compress_n_write(Map<char, string> table, string text, string filename, Bin
 
 string read_n_decompress(string filename) {
 	ifstream fin(filename, ifstream::binary);
-	boost::dynamic_bitset<> compressed;
+	string compressed("");
 
-
-	/* Write bits from file to bitset */
-	char bitbuffer;
-	fin.seekg(-2, ios::end);
+	/* Write bits from file to string */
+	char bitbuffer; // For storing 8 bits (1 byte)
+	fin.seekg(-2, ios::end); // Go to 2nd byte from the end and read number of bits to be read in last byte
 	fin.get(bitbuffer);
-	int last_bits = bitbuffer - '0';
+	int last_bits = bitbuffer - '0'; // Convert char to int
 	fin.get(bitbuffer);
-	for (int i = last_bits - 1; i >= 0; i--)
-		compressed.push_back((bitbuffer >> i) & 1);
+	for (int i = 7 - last_bits; i < 8; i++) // Read needed bits from last byte
+		compressed.insert(compressed.begin(), (((bitbuffer >> i) & 1) == 1) ? '1' : '0');
 
 	fin.seekg(-3, ios::end);
-	for (char bitbuffer; fin.get(bitbuffer);) {
-		for (int i = 7; i >= 0; i--)
-			compressed.push_back((bitbuffer >> i) & 1);
-		fin.seekg(-2, ios::cur);
+	for (char bitbuffer; fin.get(bitbuffer);) { // Read next byte while bytes aren't over
+		for (int i = 0; i < 8; i++) // Read bits from byte and write them to string
+			compressed.insert(compressed.begin(), (((bitbuffer >> i) & 1) == 1) ? '1' : '0');
+		fin.seekg(-2, ios::cur); // Go to next byte
 	}
 
 	fin.close();
 
 
 	/* Create tree using tree file */
+	filename.pop_back(); 
 	filename.pop_back();
 	filename.pop_back();
-	filename.pop_back();
-	string tree_filename = "tree" + filename + "bin";
+	string tree_filename = "tree" + filename + "bin"; // Tree filename
 	BinaryTree* tree = new BinaryTree(new BinaryTree::Node(0, '\0', nullptr, nullptr));
 	BinaryTree::Node* cur = tree->get_root();
 	ifstream treein(tree_filename);
@@ -395,79 +391,80 @@ string read_n_decompress(string filename) {
 	while (!q.isEmpty()) {
 		if (!treein.eof()) {
 			getline(treein, cur_line);
-			int line_index = 0;
+			int line_index = 0; // Current element of current line in file
 			cur = q.dequeue();
 			while (line_index < cur_line.size()) {
-				if (cur_line[line_index] == 'E' && line_index + 1 < cur_line.size() && cur_line[line_index + 1] == 'M') {
-					if (cur->get_left() == nullptr) {
+				if (cur_line[line_index] == 'E' && line_index + 1 < cur_line.size() && cur_line[line_index + 1] == 'M') { // If EM write empty node to the tree
+					if (cur->get_left() == nullptr) { // Write as left child
 						cur->set_left(new BinaryTree::Node(0, '\0', nullptr, nullptr));
 						line_index += 3;
 						q.enqueue(cur->get_left());
 					}
-					else if (cur->get_right() == nullptr) {
+					else if (cur->get_right() == nullptr) { // Write as right child
 						cur->set_right(new BinaryTree::Node(0, '\0', nullptr, nullptr));
 						line_index += 3;
 						q.enqueue(cur->get_right());
 					}
-					else if (!q.isEmpty()) {
+					else if (!q.isEmpty()) { // Get next node
 						cur = q.dequeue();
 					}
 				}
-				else if (cur_line[line_index] == 'S' && line_index + 1 < cur_line.size() && cur_line[line_index + 1] == 'P') {
-					if (cur->get_left() == nullptr) {
-						cur->set_left(new BinaryTree::Node(0, ' ', nullptr, nullptr));
+				else if (cur_line[line_index] == 'S' && line_index + 1 < cur_line.size() && cur_line[line_index + 1] == 'P') { // If SP write node with space to the tree
+					if (cur->get_left() == nullptr) { // Write as left child
+						cur->set_left(new BinaryTree::Node(0, ' ', nullptr, nullptr)); 
 						line_index += 3;
 					}
-					else if (cur->get_right() == nullptr) {
+					else if (cur->get_right() == nullptr) { // Write as right child
 						cur->set_right(new BinaryTree::Node(0, ' ', nullptr, nullptr));
 						line_index += 3;
 					}
-					else if (!q.isEmpty()) {
+					else if (!q.isEmpty()) { // Get next node
 						cur = q.dequeue();
 					}
 				}
-				else if (cur_line[line_index] == 'N' && line_index + 1 < cur_line.size() && cur_line[line_index + 1] == 'L') {
-					if (cur->get_left() == nullptr) {
+				else if (cur_line[line_index] == 'N' && line_index + 1 < cur_line.size() && cur_line[line_index + 1] == 'L') { // If NL write node with \n to the tree
+					if (cur->get_left() == nullptr) { // Write as left child
 						cur->set_left(new BinaryTree::Node(0, '\n', nullptr, nullptr));
 						line_index += 3;
 					}
-					else if (cur->get_right() == nullptr) {
+					else if (cur->get_right() == nullptr) { // Write as right child
 						cur->set_right(new BinaryTree::Node(0, '\n', nullptr, nullptr));
 						line_index += 3;
 					}
-					else if (!q.isEmpty()) {
+					else if (!q.isEmpty()) { // Get next node
 						cur = q.dequeue();
 					}
 				}
-				else {
-					if (cur->get_left() == nullptr) {
+				else { // If letter, write node letter to the tree
+					if (cur->get_left() == nullptr) { // Write as left child
 						cur->set_left(new BinaryTree::Node(0, cur_line[line_index], nullptr, nullptr));
 						line_index += 2;
 					}
-					else if (cur->get_right() == nullptr) {
+					else if (cur->get_right() == nullptr) { // Write as right child
 						cur->set_right(new BinaryTree::Node(0, cur_line[line_index], nullptr, nullptr));
 						line_index += 2;
 					}
-					else if (!q.isEmpty()) {
+					else if (!q.isEmpty()) { // Get next node
 						cur = q.dequeue();
 					}
 				}
 			}
 		}
-		else
+		else // If end of file
 			break;
 	}
 
 
 	/* Decompress text using Huffman tree */
 	string uncompressed("");
+
 	cur = tree->get_root();
-	for (size_t i = compressed.size(); i >= 1; i--) {
-		if (cur != nullptr && compressed[i - 1] == 0)
+	for (size_t i = 0; i < compressed.size(); i++) { 
+		if (cur != nullptr && compressed[i] == '0') // Go to the left subtree if current num is 0
 			cur = cur->get_left();
-		else if (cur != nullptr)
+		else if (cur != nullptr) // Go to the right subtree if current num is 1
 			cur = cur->get_right();
-		if (cur != nullptr && cur->get_letter() != '\0') {
+		if (cur != nullptr && cur->get_letter() != '\0') { // If current node has letter
 			uncompressed += cur->get_letter();
 			cur = tree->get_root();
 		}
